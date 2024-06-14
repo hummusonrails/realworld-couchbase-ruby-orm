@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 class CommentsController < ApplicationController
   before_action :authenticate_user, only: %i[create destroy]
 
@@ -22,9 +20,15 @@ class CommentsController < ApplicationController
   end
 
   def destroy
-    comment = Comment.find(params[:id])
-    comment.destroy
-    head :no_content
+    article = Article.find_by_slug(params[:article_id])
+    comment = article.comments.find(params[:id]) if article
+
+    if comment && comment.author_id == current_user.id
+      comment.destroy
+      render json: { message: 'Comment deleted successfully' }, status: :no_content
+    else
+      render json: { errors: ['You are not authorized to delete this comment'] }, status: :forbidden
+    end
   end
 
   private

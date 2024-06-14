@@ -21,7 +21,7 @@
             <%= form.email_field :email, class: "form-control form-control-lg", placeholder: "Email" %>
           </fieldset>
           <fieldset class="form-group">
-            <%= form.password_field :password, class: "form-control form-control-lg", placeholder: "Password" %>
+            <%= form.password_field :password_digest, class: "form-control form-control-lg", placeholder: "Password" %>
           </fieldset>
           <%= form.submit 'Sign up', class: "btn btn-lg btn-primary pull-xs-right" %>
         <% end %>

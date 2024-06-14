@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module Api
   class UsersController < ApplicationController
     before_action :authenticate_user, only: %i[update current]

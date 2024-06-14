@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
 
@@ -8,8 +8,6 @@ RSpec.describe 'Api::Tags', type: :request do
   let(:tag2) { Tag.new(id: 'tag2-id', name: 'tag2', type: 'tag') }
 
   before do
-    mock_couchbase_methods
-
     allow(Tag).to receive(:all).and_return([tag1, tag2])
   end
 

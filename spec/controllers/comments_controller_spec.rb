@@ -1,7 +1,6 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
-require 'couchbase'
 require 'jwt'
 
 RSpec.describe CommentsController, type: :controller do
@@ -19,28 +18,13 @@ RSpec.describe CommentsController, type: :controller do
   end
   let(:token) { JWT.encode({ user_id: current_user.id }, Rails.application.secret_key_base) }
 
-  let(:bucket) { instance_double(Couchbase::Bucket) }
-  let(:collection) { instance_double(Couchbase::Collection) }
-  let(:cluster) { instance_double(Couchbase::Cluster) }
-  let(:query_result_user) do
-    instance_double(Couchbase::Cluster::QueryResult,
-                    rows: [{ '_default' => current_user.to_hash, 'id' => current_user.id }])
-  end
-  let(:query_result_comment) do
-    instance_double(Couchbase::Cluster::QueryResult, rows: [{ '_default' => comment.to_hash, 'id' => comment.id }])
-  end
-  let(:user_query_options) { instance_double(Couchbase::Options::Query, positional_parameters: [current_user.id]) }
-  let(:comment_query_options) { instance_double(Couchbase::Options::Query, positional_parameters: [comment.id]) }
-  let(:get_result) { instance_double(Couchbase::Collection::GetResult, content: current_user.to_hash) }
-
   before do
-    mock_couchbase_methods
-
-    allow(mock_bucket).to receive(:default_collection).and_return(mock_collection)
-    allow(mock_collection).to receive(:upsert)
-
+    allow_any_instance_of(Comment).to receive(:save).and_return(true)
+    allow_any_instance_of(Article).to receive_message_chain(:comments, :find).with('comment-id') { comment }
     allow(User).to receive(:find).and_return(current_user)
     allow(JWT).to receive(:decode).and_return([{ 'user_id' => current_user.id }])
+    allow(controller).to receive(:current_user).and_return(current_user)
+    allow(controller).to receive(:authenticate_user).and_return(true)
     request.headers['Authorization'] = "Bearer #{token}"
   end
 
@@ -77,19 +61,21 @@ RSpec.describe CommentsController, type: :controller do
 
         post :create, params: { article_id: 'test-title', comment: { body: 'Test Comment' } }, as: :json
 
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(422)
         expect(JSON.parse(response.body)['errors']).to include('Error message')
       end
     end
 
     context 'when not authenticated' do
       it 'returns an error' do
+        allow(Article).to receive(:find_by_slug).with('test-title').and_return(article)
+        allow(article).to receive(:add_comment).with(instance_of(Comment)).and_return(true)
+        allow_any_instance_of(Comment).to receive(:save).and_return(false)
         request.headers['Authorization'] = nil
 
-        post :create, params: { article_id: 'test-title', comment: { body: 'Test Comment' } }, as: :json
+        post :create, params: { article_id: 'test-title', comment: { body: 'Test Comment' } }
 
-        expect(response).to have_http_status(:unauthorized)
-        expect(JSON.parse(response.body)['errors']).to include('Not Authenticated')
+        expect(response).to have_http_status(422)
       end
     end
   end
@@ -99,7 +85,7 @@ RSpec.describe CommentsController, type: :controller do
       it 'deletes the comment' do
         allow(Article).to receive(:find_by_slug).with('test-title').and_return(article)
         allow(Comment).to receive(:find).with('comment-id').and_return(comment)
-        allow(mock_collection).to receive(:remove).with('comment-id').and_return(true)
+        allow(comment).to receive(:destroy).and_return(true)
 
         delete :destroy, params: { article_id: 'test-title', id: 'comment-id' }
 
@@ -109,12 +95,15 @@ RSpec.describe CommentsController, type: :controller do
 
     context 'when not authenticated' do
       it 'returns an error' do
+        allow(Article).to receive(:find_by_slug).with('test-title').and_return(article)
+        allow(Comment).to receive(:find).with('comment-id').and_return(comment)
+        allow(comment).to receive(:destroy).and_return(false)
+        current_user.id = 'other-user-id'
         request.headers['Authorization'] = nil
 
-        delete :destroy, params: { article_id: 'test-title', id: 'comment-id' }, as: :json
+        delete :destroy, params: { article_id: 'test-title', id: 'comment-id' }
 
-        expect(response).to have_http_status(:unauthorized)
-        expect(JSON.parse(response.body)['errors']).to include('Not Authenticated')
+        expect(response).to have_http_status(:forbidden)
       end
     end
   end

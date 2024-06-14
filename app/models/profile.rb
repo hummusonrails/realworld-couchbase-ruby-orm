@@ -1,8 +1,6 @@
-# frozen_string_literal: true
-
 class Profile
   include ActiveModel::Model
-  attr_accessor :id, :username, :email, :password_digest, :bio, :image, :following, :type, :favorites
+  attr_accessor :id, :username, :email, :password_digest, :bio, :image, :following, :type, :favorites, :created_at, :updated_at
 
   def to_hash
     {
@@ -12,7 +10,9 @@ class Profile
       'bio' => bio,
       'image' => image,
       'following' => following || [],
-      'favorites' => favorites || []
+      'favorites' => favorites || [],
+      'created_at' => created_at,
+      'updated_at' => updated_at
     }
   end
 end

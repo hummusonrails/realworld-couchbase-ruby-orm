@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+
 
 # This file is copied to spec/ when you run 'rails generate rspec:install'
 require 'spec_helper'
@@ -30,6 +30,14 @@ RSpec.configure do |config|
   config.use_active_record = false
 
   config.include CouchbaseMock
+
+  config.before(:each) do
+    mock_couchbase_methods
+
+    allow(Couchbase::Cluster).to receive(:connect).and_return(mock_cluster)
+    allow(mock_cluster).to receive(:bucket).and_return(mock_bucket)
+    allow(mock_bucket).to receive(:default_collection).and_return(mock_collection)
+  end
 
   # If you enable ActiveRecord support you should uncomment these lines,
   # note if you'd prefer not to run each example within a transaction, you

@@ -1,7 +1,6 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
-require 'couchbase'
 require 'jwt'
 
 RSpec.describe UsersController, type: :controller do
@@ -14,21 +13,8 @@ RSpec.describe UsersController, type: :controller do
                 updated_at: Time.now, tag_list: %w[tag1 tag2])
   end
   let(:token) { JWT.encode({ user_id: current_user.id }, Rails.application.secret_key_base) }
-  let(:bucket) { instance_double(Couchbase::Bucket) }
-  let(:collection) { instance_double(Couchbase::Collection) }
-  let(:cluster) { instance_double(Couchbase::Cluster) }
-  let(:get_result) { instance_double(Couchbase::Collection::GetResult, content: current_user.to_hash) }
-  let(:lookup_in_result) { instance_double(Couchbase::Collection::LookupInResult, content: [], exists?: true) }
-  let(:query_result) { instance_double(Couchbase::Cluster::QueryResult, rows: [current_user.to_hash]) }
-  let(:query_result_options) { instance_double(Couchbase::Options::Query, positional_parameters: [current_user.id]) }
 
   before do
-    mock_couchbase_methods
-
-    allow(mock_bucket).to receive(:default_collection).and_return(mock_collection)
-    allow(mock_collection).to receive(:get).with(current_user.id).and_return(get_result)
-    allow(mock_collection).to receive(:lookup_in).with(current_user.id, anything).and_return(lookup_in_result)
-    allow(mock_collection).to receive(:upsert)
     allow(article).to receive(:author).and_return(current_user)
     allow(User).to receive(:new).and_return(current_user)
     allow(User).to receive(:find_by_email).and_return(current_user)
@@ -122,13 +108,11 @@ RSpec.describe UsersController, type: :controller do
   describe 'PUT #update' do
     context 'when authenticated' do
       it 'updates the current user and returns the updated user' do
-        allow(mock_collection).to receive(:get).with(current_user.id).and_return(get_result)
-        allow(mock_collection).to receive(:upsert).and_return(true)
+        allow(current_user).to receive(:update).and_return(true)
 
         updated_attributes = { username: 'updateduser', bio: 'Updated bio' }
-        allow(current_user).to receive(:update).and_wrap_original do |m, *_args|
-          m.call(updated_attributes)
-        end
+
+        allow(current_user).to receive(:update).with(updated_attributes.stringify_keys).and_return(true)
 
         put :update, params: { user: updated_attributes }
 

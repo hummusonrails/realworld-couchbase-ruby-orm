@@ -51,7 +51,7 @@
                 <p><%= article.description %></p>
                 <span>Read more...</span>
                 <ul class="tag-list">
-                    <% article.tags.each do |tag| %>
+                    <% article.tag_list.split(',').each do |tag| %>
                     <li class="tag-default tag-pill tag-outline"><%= tag %></li>
                     <% end %>
                 </ul>

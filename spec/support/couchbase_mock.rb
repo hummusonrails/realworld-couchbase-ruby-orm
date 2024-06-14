@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module CouchbaseMock
   def self.included(base)
     base.before do
@@ -9,8 +7,8 @@ module CouchbaseMock
 
   def mock_couchbase_methods
     allow(Couchbase::Cluster).to receive(:new).and_return(mock_cluster)
-    allow(Rails.application.config).to receive(:couchbase_bucket).and_return(mock_bucket)
-    allow(Rails.application.config).to receive(:couchbase_cluster).and_return(mock_cluster)
+    allow(Couchbase::Bucket).to receive(:new).and_return(mock_bucket)
+    allow(Couchbase::Collection).to receive(:new).and_return(mock_collection)
     allow(mock_bucket).to receive(:default_collection).and_return(mock_collection)
   end
 

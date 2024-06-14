@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module Api
   class ProfilesController < ApplicationController
     before_action :authenticate_user, only: %i[follow unfollow]

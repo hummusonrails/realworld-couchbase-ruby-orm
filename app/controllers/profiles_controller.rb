@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 class ProfilesController < ApplicationController
   before_action :authenticate_user, only: %i[follow unfollow]
 
@@ -13,7 +11,7 @@ class ProfilesController < ApplicationController
       return
     end
 
-    @profile = Profile.new(user.to_hash.merge(following: current_user&.following?(user)))
+    @profile = Profile.new(user.attributes.merge(following: current_user&.following?(user)))
     @articles = user.articles
     @current_user = current_user
 
@@ -33,7 +31,7 @@ class ProfilesController < ApplicationController
       return
     end
 
-    @profile = Profile.new(user.to_hash.merge(following: current_user&.following?(user)))
+    @profile = Profile.new(user.attributes.merge(following: current_user&.following?(user)))
     @articles = user.favorited_articles
 
     respond_to do |format|
@@ -62,7 +60,7 @@ class ProfilesController < ApplicationController
     end
 
     current_user.follow(user)
-    @profile = Profile.new(user.to_hash.merge(following: true))
+    @profile = Profile.new(user.attributes.to_hash.merge(following: true))
 
     respond_to do |format|
       format.html { redirect_to profile_path(username: user.username), notice: 'User followed successfully.' }

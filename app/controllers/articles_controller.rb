@@ -1,7 +1,3 @@
-# frozen_string_literal: true
-
-require 'json'
-
 class ArticlesController < ApplicationController
   before_action :authenticate_user, only: %i[create update destroy favorite unfavorite feed]
 
@@ -78,11 +74,11 @@ class ArticlesController < ApplicationController
     article = current_user.find_article_by_slug(params[:id])
 
     respond_to do |format|
-      if article.update(article_params)
+      if article&.update(article_params)
         format.html { redirect_to article_path(article.slug), notice: 'Article updated successfully.' }
         format.json { render json: { article: article.to_hash }, status: :ok }
       else
-        format.html { redirect_to edit_article_path(article.slug), alert: 'There were errors updating your article.' }
+        format.html { redirect_to root_path, alert: 'There were errors updating your article.' }
         format.json { render json: { errors: article.errors.full_messages }, status: :unprocessable_entity }
       end
     end

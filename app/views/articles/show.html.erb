@@ -34,11 +34,13 @@
     <div class="row article-content">
       <div class="col-md-12">
         <%= markdown @article.body %>
-        <ul class="tag-list">
-          <% @article.tags.each do |tag| %>
-            <li class="tag-default tag-pill tag-outline"><%= tag %></li>
-          <% end %>
-        </ul>
+        <% if @article.tag_list %>
+          <ul class="tag-list">
+            <% @article.tag_list.split(',').each do |tag| %>
+              <li class="tag-default tag-pill tag-outline"><%= tag %></li>
+            <% end %>
+          </ul>
+        <% end %>
       </div>
     </div>
 

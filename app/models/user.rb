@@ -1,20 +1,42 @@
-# frozen_string_literal: true
+require 'couchbase-orm'
 
-class User
-  include ActiveModel::Model
-  attr_accessor :id, :username, :email, :password_digest, :bio, :image, :type, :password, :following, :favorites
+class User < CouchbaseOrm::Base
+  has_many :articles, dependent: :destroy
+  has_many :comments
+
+  attribute :username, :string
+  attribute :email, :string
+  attribute :password_digest, :string
+  attribute :bio, :string
+  attribute :image, :string
+  attribute :type, :string
+  attribute :following, default: []
+  attribute :favorites, default: []
+  attribute :created_at, :datetime
+  attribute :updated_at, :datetime
 
   validates :username, presence: true
   validates :email, presence: true
   validates :password_digest, presence: true
-  validates :password, presence: true, on: :create
+
+  def to_hash
+    {
+      id:,
+      username:,
+      email:,
+      bio:,
+      image:,
+      following:,
+      favorites:,
+      created_at:,
+      updated_at:
+    }
+  end
 
   def save
-    self.password_digest = BCrypt::Password.create(password) if password.present?
-    validate!
-    bucket = Rails.application.config.couchbase_bucket
+    self.password_digest = BCrypt::Password.create(password_digest) if password_digest.present?
     self.id ||= SecureRandom.uuid
-    bucket.default_collection.upsert(id, to_hash)
+    super()
   end
 
   def update(attributes)
@@ -24,253 +46,110 @@ class User
     save
   end
 
-  def to_hash
-    {
-      'type' => 'user',
-      'username' => username,
-      'email' => email,
-      'password_digest' => password_digest,
-      'bio' => bio,
-      'image' => image,
-      'following' => following || [],
-      'favorites' => favorites || []
-    }
-  end
-
-  def self.find(id)
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([id])
-    result = cluster.query(
-      'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE META().id = ? LIMIT 1', options
-    )
-    return unless result.rows.any?
-
-    row = result.rows.first
-    User.new(row['_default'].merge('id' => row['id']))
-  end
-
   def self.find_by_email(email)
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([email])
-    result = cluster.query(
-      'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `email` = ? LIMIT 1', options
-    )
-    return unless result.rows.any?
+    user = User.find_by(email:)
+    raise StandardError, "Couldn't find User with 'email'=#{email}" unless user
 
-    row = result.rows.first
-    User.new(row['_default'].merge('id' => row['id']))
+    user
   end
 
   def self.find_by_username(username)
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([username])
-    result = cluster.query(
-      'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `username` = ? LIMIT 1', options
-    )
+    user = User.find_by(username:)
+    raise StandardError, "Couldn't find User with 'username'=#{username}" unless user
 
-    return unless result.rows.any?
-
-    row = result.rows.first
-    User.new(row['_default'].merge('id' => row['id']))
+    user
   end
 
   def follow(user)
-    bucket = Rails.application.config.couchbase_bucket
-    collection = bucket.default_collection
+    user = User.find(user.id)
+    raise StandardError, "Couldn't find User with 'id'=#{user.id}" if user.nil?
 
-    exists_result = collection.lookup_in(id, [Couchbase::LookupInSpec.exists('following')])
-    unless exists_result.exists?(0)
-      collection.mutate_in(id, [
-                             Couchbase::MutateInSpec.insert('following', [])
-                           ])
-    end
+    return if following?(user)
 
-    collection.mutate_in(id, [
-                           Couchbase::MutateInSpec.array_add_unique('following', user.id)
-                         ])
+    following << user.id
+    save!
   end
 
   def unfollow(user)
-    bucket = Rails.application.config.couchbase_bucket
-    collection = bucket.default_collection
+    user = User.find(user.id)
+    raise StandardError, "Couldn't find User with 'id'=#{user.id}" if user.nil?
 
-    exists_result = collection.lookup_in(id, [Couchbase::LookupInSpec.exists('following')])
-    return unless exists_result.exists?(0)
-
-    result = collection.lookup_in(id, [Couchbase::LookupInSpec.get('following')])
-    following = result.content(0)
-
-    return unless following.include?(user.id)
+    raise StandardError, "Couldn't find User with 'id'=#{user.id} in following list" unless following?(user)
 
     following.delete(user.id)
-
-    collection.mutate_in(id, [
-                           Couchbase::MutateInSpec.replace('following', following)
-                         ])
+    save!
   end
 
   def following?(user)
-    bucket = Rails.application.config.couchbase_bucket
-    collection = bucket.default_collection
-
-    begin
-      exists_result = collection.lookup_in(id, [Couchbase::LookupInSpec.exists('following')])
-    rescue Couchbase::Error::DocumentNotFound
-      return false
-    end
-
-    return false unless exists_result.exists?(0)
-
-    result = collection.lookup_in(id, [
-                                    Couchbase::LookupInSpec.get('following')
-                                  ])
-
-    following = begin
-      result.content(0)
-    rescue StandardError
-      []
-    end
     following.include?(user.id)
   end
 
   def favorited_articles
-    bucket = Rails.application.config.couchbase_bucket
-    collection = bucket.default_collection
-    result = collection.lookup_in(id, [
-                                    Couchbase::LookupInSpec.get('favorites')
-                                  ])
-    favorite_ids = begin
-      result.content(0)
-    rescue StandardError
-      []
+    articles = []
+    favorites.map do |article_id|
+      begin
+        article = Article.find(article_id)
+      rescue Couchbase::Error::DocumentNotFound
+        article = nil
+      end
+      articles << article if article
     end
-    find_by_ids(favorite_ids)
+
+    if articles.empty?
+      []
+    else
+      articles.flatten
+    end
   end
 
   def favorite(article)
-    bucket = Rails.application.config.couchbase_bucket
-    collection = bucket.default_collection
+    raise StandardError, "Couldn't find Article with 'id'=#{article.id}" unless Article.find(article.id)
+    return if favorited?(article)
 
-    exists_result = collection.lookup_in(id, [Couchbase::LookupInSpec.exists('favorites')])
-    unless exists_result.exists?(0)
-      collection.mutate_in(id, [
-                             Couchbase::MutateInSpec.insert('favorites', [])
-                           ])
-    end
-
-    collection.mutate_in(id, [
-                           Couchbase::MutateInSpec.array_add_unique('favorites', article.id)
-                         ])
-    collection.mutate_in(article.id, [
-                           Couchbase::MutateInSpec.increment('favorites_count', 1)
-                         ])
+    update(favorites: favorites << article.id)
+    article.update(favorites_count: article.favorites_count + 1)
   end
 
   def unfavorite(article)
-    bucket = Rails.application.config.couchbase_bucket
-    collection = bucket.default_collection
+    raise StandardError, "Couldn't find Article with 'id'=#{article.id}" unless Article.find(article.id)
+    raise StandardError, "Couldn't find Article with 'id'=#{article.id} in favorites list" unless favorited?(article)
 
-    exists_result = collection.lookup_in(id, [Couchbase::LookupInSpec.exists('favorites')])
-    return unless exists_result.exists?(0)
-
-    result = collection.lookup_in(id, [Couchbase::LookupInSpec.get('favorites')])
-    favorites = result.content(0)
-
-    return unless favorites.include?(article.id)
-
-    favorites.delete(article.id)
-
-    collection.mutate_in(id, [
-                           Couchbase::MutateInSpec.replace('favorites', favorites)
-                         ])
-    collection.mutate_in(article.id, [
-                           Couchbase::MutateInSpec.decrement('favorites_count', 1)
-                         ])
+    update(favorites: favorites - [article.id])
+    article.update(favorites_count: article.favorites_count - 1)
   end
 
   def favorited?(article)
-    bucket = Rails.application.config.couchbase_bucket
-    collection = bucket.default_collection
-
-    exists_result = collection.lookup_in(id, [Couchbase::LookupInSpec.exists('favorites')])
-    return false unless exists_result.exists?(0)
-
-    result = collection.lookup_in(id, [
-                                    Couchbase::LookupInSpec.get('favorites')
-                                  ])
-
-    favorites = begin
-      result.content(0)
-    rescue StandardError
-      []
+    if favorites.nil?
+      false
+    else
+      favorites.include?(article.id)
     end
-    favorites.include?(article.id)
   end
 
   def favorited_by?(username)
     user = User.find_by_username(username)
-    user.favorites.include?(self.id)
+    user.favorites.include?(id)
   end
 
   def articles
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([id])
-    query = "SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `type` = 'article' AND `author_id` = ?"
-    result = cluster.query(query, options)
-    result.rows.map { |row| Article.new(row['_default']) }
-  end
-
-  def find_by_ids(ids)
-    return [] if ids.empty?
-
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([ids])
-    result = cluster.query('SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE META().id IN $1',
-                           options)
-    result.rows.map { |row| Article.new(row['_default'].merge('id' => row['id'])) }
+    articles = Article.find_by(author_id: id)
+    if articles.nil?
+      nil
+    else
+      [articles]
+    end
   end
 
   def find_article_by_slug(slug)
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([slug, id])
-    result = cluster.query(
-      'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `slug` = ? AND `author_id` = ? LIMIT 1', options
-    )
-    return unless result.rows.any?
-
-    row = result.rows.first
-    Article.new(row['_default'].merge('id' => row['id']))
+    Article.find_by_slug(slug:)
   end
 
   def feed
-    feed = []
-
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([following])
-    result = cluster.query(
-      'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `author_id` IN ?', options
-    )
-
-    result.rows.each do |row|
-      parsed_row = begin
-        JSON.parse(row)
-      rescue StandardError
-        row
-      end
-      article_data = parsed_row['_default'].merge('id' => parsed_row['id'])
-      feed << Article.new(article_data)
+    feed = Article.find_by(author_id: following)
+    if feed.nil? || feed.empty?
+      []
+    else
+      feed
     end
-    feed
-  end
-
-  def validate!
-    raise ActiveModel::ValidationError, self if invalid?
   end
 end
