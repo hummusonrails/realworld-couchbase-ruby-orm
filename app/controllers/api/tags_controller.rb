@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module Api
   class TagsController < ApplicationController
     def index

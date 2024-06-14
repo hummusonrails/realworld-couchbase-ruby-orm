@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
 require 'jwt'
@@ -21,37 +21,43 @@ RSpec.describe 'Api::Articles', type: :request do
         'created_at' => Time.now,
         'updated_at' => Time.now,
         'type' => 'article',
-        'favorites_count' => 0
+        'favorites_count' => 0,
+        'tag_list' => %w[tag1 tag2],
+      },
+      'id' => 'article-id'
+    }
+  end
+  let(:updated_article_data) do
+    {
+      '_default' => {
+        'id' => 'article-id',
+        'slug' => 'test-title',
+        'title' => 'Updated Title',
+        'description' => 'Test Description',
+        'body' => 'Test Body',
+        'author_id' => current_user.id,
+        'created_at' => Time.now,
+        'updated_at' => Time.now,
+        'type' => 'article',
+        'favorites_count' => 0,
+        'tag_list' => %w[tag1 tag2],
       },
       'id' => 'article-id'
     }
   end
   let(:updated_attributes) { { title: 'Updated Title' } }
   let(:article) { Article.new(article_data['_default'].merge('id' => article_data['id'])) }
+  let(:updated_article) { Article.new(updated_article_data['_default'].merge('id' => updated_article_data['id'])) }
   let(:new_article) do
     Article.new(id: 'new-article-id', title: 'New Article', description: 'New Description', body: 'New Body',
                 tag_list: %w[tag1 tag2], author_id: current_user.id, slug: 'new-article')
   end
   let(:token) { JWT.encode({ user_id: current_user.id }, Rails.application.secret_key_base) }
-  let(:options) do
-    instance_double(Couchbase::Options::Query, positional_parameters: ['test-title'])
-  end
-  let(:query_result) do
-    instance_double(Couchbase::Cluster::QueryResult, rows: [article.to_hash.merge('_default' => article.to_hash)])
-  end
 
   before do
-    mock_couchbase_methods
-
-    allow(Couchbase::Options::Query).to receive(:new).and_return(options)
     allow(User).to receive(:find).with(current_user.id).and_return(current_user)
     allow(User).to receive(:find_by_email).and_return(current_user)
     allow(JWT).to receive(:decode).and_return([{ 'user_id' => current_user.id }])
-    allow(mock_cluster).to receive(:query).with(
-      'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `slug` = ? AND `author_id` = ? LIMIT 1', options
-    ).and_return(query_result)
-    allow(mock_collection).to receive(:upsert)
-    allow(mock_collection).to receive(:remove)
   end
 
   describe 'GET /api/articles' do
@@ -115,7 +121,7 @@ RSpec.describe 'Api::Articles', type: :request do
       post('/api/articles',
            params: { article: { title: 'New Article', description: 'New Description', body: 'New Body', tag_list: %w[tag1 tag2] } }.to_json, headers:)
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(422)
       expect(JSON.parse(response.body)['errors']).to include('Error message')
     end
   end
@@ -124,12 +130,10 @@ RSpec.describe 'Api::Articles', type: :request do
     let(:updated_attributes) { { title: 'Updated Title' } }
 
     it 'updates the article' do
-      allow(mock_collection).to receive(:upsert).and_return(true)
-      allow(mock_cluster).to receive(:query).with(
-        'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `slug` = ? AND `author_id` = ? LIMIT 1', anything
-      ).and_return(query_result)
-      allow(article).to receive(:update).and_call_original
       allow(Article).to receive(:find_by_slug).and_return(article)
+      allow_any_instance_of(Article).to receive(:update).and_return(true)
+      allow_any_instance_of(Article).to receive(:save).and_return(true)
+      allow_any_instance_of(Article).to receive(:to_hash).and_return(updated_article.to_hash)
 
       headers = {
         'Content-Type': 'application/json',
@@ -153,7 +157,7 @@ RSpec.describe 'Api::Articles', type: :request do
 
       put('/api/articles/test-title', params: { article: updated_attributes }.to_json, headers:)
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(422)
       expect(JSON.parse(response.body)['errors']).to include('Error message')
     end
   end

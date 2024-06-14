@@ -1,30 +1,53 @@
-# frozen_string_literal: true
+require 'couchbase-orm'
 
-class Article
-  include ActiveModel::Model
-  attr_accessor :id, :slug, :title, :description, :body, :tag_list, :created_at, :updated_at, :author_id, :type,
-                :favorites, :favorites_count
+class Article < CouchbaseOrm::Base
+  belongs_to :user
+  has_many :comments, dependent: :destroy
 
+  attribute :slug, :string
+  attribute :title, :string
+  attribute :description, :string
+  attribute :body, :string
+  attribute :tag_list, :string
+  attribute :created_at, :time
+  attribute :updated_at, :time
+  attribute :author_id, :string
+  attribute :favorites
+  attribute :favorites_count, :integer, default: 0
+
+  view :by_id, emit_key: :id
+  view :by_slug, emit_key: :slug
+  view :by_author_id, emit_key: :author_id
+  view :by_article_id, emit_key: :id
+
+  validates :slug, presence: true
   validates :title, presence: true
+  validates :description, presence: true
   validates :body, presence: true
+  validates :tag_list, presence: true
   validates :author_id, presence: true
 
-  def initialize(attributes = {})
-    super
-    self.created_at = Time.parse(created_at) if created_at.is_a?(String)
-    self.updated_at = Time.parse(updated_at) if updated_at.is_a?(String)
-  end
-
   def save
-    validate!
-    bucket = Rails.application.config.couchbase_bucket
     self.id ||= SecureRandom.uuid
     self.slug ||= generate_slug(title)
-    self.created_at ||= Time.now
-    self.updated_at ||= Time.now
-    self.favorites ||= []
-    self.favorites_count ||= 0
-    bucket.default_collection.upsert(id, to_hash)
+
+    super
+  end
+
+  def to_hash
+    {
+      id:,
+      slug:,
+      title:,
+      description:,
+      body:,
+      tag_list:,
+      created_at:,
+      updated_at:,
+      author_id:,
+      favorites:,
+      favorites_count:
+    }
   end
 
   def update(attributes)
@@ -34,92 +57,21 @@ class Article
     save
   end
 
-  def destroy
-    bucket = Rails.application.config.couchbase_bucket
-    bucket.default_collection.remove(id)
-  end
-
-  def to_hash
-    {
-      'slug' => slug,
-      'title' => title,
-      'description' => description,
-      'body' => body,
-      'tag_list' => tag_list,
-      'created_at' => created_at,
-      'updated_at' => updated_at,
-      'author_id' => author_id,
-      'type' => 'article',
-      'favorites_count' => favorites_count
-    }
-  end
-
   def self.find_by_slug(slug)
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([slug])
-    result = cluster.query(
-      "SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `type` = 'article' AND `slug` = ? LIMIT 1", options
-    )
-    return unless result.rows.any?
-
-    row = result.rows.first
-    Article.new(row['_default'].merge('id' => row['id']))
-  end
-
-  def self.all
-    cluster = Rails.application.config.couchbase_cluster
-    query = "SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `type` = 'article'"
-    result = cluster.query(query)
-    articles = []
-    if result.rows.any?
-      articles = result.rows.map do |row|
-        article_data = row['_default']
-        next if article_data.nil?
-
-        article_data['id'] = row['id']
-        Article.new(article_data)
-      end
-    end
-    articles.compact
+    find_by(slug:)
   end
 
   def comments
-    cluster = Rails.application.config.couchbase_cluster
-    options = Couchbase::Options::Query.new
-    options.positional_parameters([id])
-    result = cluster.query(
-      "SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `type` = 'comment' AND `article_id` = ?", options
-    )
-    comments = []
-    if result.rows.any?
-      comments = result.rows.map do |row|
-        comment_data = row['_default']
-        next if comment_data.nil?
-
-        comment_data['id'] = row['id']
-        Comment.new(comment_data)
-      end
-    end
-    comments.compact
+    Comment.where(article_id: id)
   end
 
   def add_comment(comment)
-    comment = Comment.new(comment) unless comment.is_a?(Comment)
-    comment.author_id = author_id
-    comment.article_id = id
+    comment = Article.comments.new(comment)
     comment.save
   end
 
-  def tags
-    return [] if tag_list.blank?
-
-    tag_list.is_a?(String) ? tag_list.split(',').map(&:strip) : tag_list
-  end
-
   def add_tag(tag)
-    self.tag_list = '' if tag_list.nil?
-    tag_list << tag unless tag_list.include?(tag)
+    tag_list << tag
     save
   end
 
@@ -136,9 +88,5 @@ class Article
 
   def author
     User.find(author_id)
-  end
-
-  def validate!
-    raise ActiveModel::ValidationError, self if invalid?
   end
 end

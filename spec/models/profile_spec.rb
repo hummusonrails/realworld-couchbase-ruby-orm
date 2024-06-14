@@ -1,7 +1,6 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
-require 'couchbase'
 
 RSpec.describe Profile, type: :model do
   let(:profile) do
@@ -18,7 +17,9 @@ RSpec.describe Profile, type: :model do
                                       'bio' => 'This is a test bio',
                                       'image' => 'test_image.png',
                                       'following' => [],
-                                      'favorites' => []
+                                      'favorites' => [],
+                                      'created_at' => nil,
+                                      'updated_at' => nil
                                     })
     end
   end

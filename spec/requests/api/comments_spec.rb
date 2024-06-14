@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
 
@@ -8,25 +8,11 @@ RSpec.describe 'Api::Comments', type: :request do
   let(:article) { Article.new(id: 'article-id', title: 'Test Title', description: 'Test Description', body: 'Test Body', tag_list: ['tag1', 'tag2'], author_id: current_user.id, slug: 'test-title') }
   let(:comment) { Comment.new(id: 'comment-id', body: 'Test Comment', author_id: current_user.id, article_id: article.id, type: 'comment') }
   let(:token) { JWT.encode({ user_id: current_user.id }, Rails.application.secret_key_base) }
-  let(:options) do
-    instance_double(Couchbase::Options::Query, positional_parameters: ['article-id'])
-  end
-  let(:query_result) do
-    instance_double(Couchbase::Cluster::QueryResult, rows: [comment.to_hash.merge('_default' => comment.to_hash)])
-  end
 
   before do
-    mock_couchbase_methods
-
-    allow(Couchbase::Options::Query).to receive(:new).and_return(options)
     allow(User).to receive(:find).with(current_user.id).and_return(current_user)
     allow(Article).to receive(:find_by_slug).with(article.slug).and_return(article)
     allow(JWT).to receive(:decode).and_return([{ 'user_id' => current_user.id }])
-    allow(mock_cluster).to receive(:query).with(
-      "SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `type` = 'comment' AND `article_id` = ?", options
-    ).and_return(query_result)
-    allow(mock_collection).to receive(:upsert)
-    allow(mock_collection).to receive(:remove)
   end
 
   describe 'GET /api/articles/:slug/comments' do
@@ -68,7 +54,7 @@ RSpec.describe 'Api::Comments', type: :request do
 
         post "/api/articles/#{article.slug}/comments", params: { comment: { body: 'Test Comment' } }.to_json, headers: headers.merge('Authorization': "Bearer #{token}")
 
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(422)
         expect(JSON.parse(response.body)['errors']).to include('Error message')
       end
     end

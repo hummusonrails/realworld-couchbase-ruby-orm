@@ -1,0 +1,14 @@
+common: &common
+  connection_string: <%= ENV.fetch('COUCHBASE_CONNECTION_STRING') %>
+  username: <%= ENV.fetch('COUCHBASE_USER') %>
+  password: <%= ENV.fetch('COUCHBASE_PASSWORD') %>
+  bucket: <%= ENV.fetch('COUCHBASE_BUCKET') %>
+
+development:
+  <<: *common
+
+test:
+  <<: *common
+
+production:
+  <<: *common

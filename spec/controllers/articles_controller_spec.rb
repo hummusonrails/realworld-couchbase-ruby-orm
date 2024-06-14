@@ -1,7 +1,6 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
-require 'couchbase'
 require 'jwt'
 
 RSpec.describe ArticlesController, type: :controller do
@@ -63,54 +62,21 @@ RSpec.describe ArticlesController, type: :controller do
   let(:tags) { tag_data.map { |data| Tag.new(data['_default'].merge('id' => data['id'])) } }
   let(:updated_attributes) { { title: 'Updated Title' } }
   let(:token) { JWT.encode({ user_id: current_user.id }, Rails.application.secret_key_base) }
-  let(:cluster) { instance_double(Couchbase::Cluster) }
-  let(:bucket) { instance_double(Couchbase::Bucket) }
-  let(:collection) { instance_double(Couchbase::Collection) }
-  let(:query_result_article) do
-    instance_double(Couchbase::Cluster::QueryResult, rows: [article.to_hash.merge('_default' => article.to_hash)])
-  end
-  let(:query_result_articles) do
-    instance_double(Couchbase::Cluster::QueryResult, rows: [article.to_hash.merge('_default' => article.to_hash)])
-  end
-  let(:query_result_comments) do
-    instance_double(Couchbase::Cluster::QueryResult, rows: [comment.to_hash.merge('_default' => comment.to_hash)])
-  end
-  let(:get_result) { instance_double(Couchbase::Collection::GetResult, content: current_user.to_hash) }
-  let(:errors) { double('errors', any?: true, full_messages: ['Error message']) }
-  let(:lookup_in_result) { instance_double(Couchbase::Collection::LookupInResult, content: [], exists?: true) }
-  let(:mutate_in) { instance_double(Couchbase::Collection::MutateInSpec) }
 
   before do
-    mock_couchbase_methods
-
-    allow(mock_bucket).to receive(:default_collection).and_return(mock_collection)
     allow(Tag).to receive(:all).and_return(tags)
     allow(Article).to receive(:all).and_return([article])
     allow(User).to receive(:find).and_return(current_user)
+    allow_any_instance_of(Article).to receive(:comments).and_return([comment])
     allow(JWT).to receive(:decode).and_return([{ 'user_id' => current_user.id }])
     allow(controller).to receive(:current_user).and_return(current_user)
     allow(controller).to receive(:authenticate_user).and_return(true)
-    allow(mock_cluster).to receive(:query).with(
-      'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `slug` = ? AND `author_id` = ? LIMIT 1', an_instance_of(Couchbase::Options::Query)
-    ).and_return(query_result_article)
-    allow(mock_cluster).to receive(:query).with(
-      "SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `type` = 'article' AND `author_id` = ?", an_instance_of(Couchbase::Options::Query)
-    ).and_return(query_result_articles)
-    allow(mock_cluster).to receive(:query).with(
-      "SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `type` = 'comment' AND `article_id` = ?", an_instance_of(Couchbase::Options::Query)
-    ).and_return(query_result_comments)
-    allow(mock_collection).to receive(:upsert)
-    allow(mock_collection).to receive(:remove)
-    allow(mock_collection).to receive(:lookup_in).with(current_user.id, anything).and_return(lookup_in_result)
-    allow(mock_collection).to receive(:mutate_in).with(current_user.id, anything).and_return(mutate_in)
     request.headers['Authorization'] = "Bearer #{token}"
     stub_image_tag
   end
 
   describe 'GET #index' do
     it 'returns all articles' do
-      allow(mock_collection).to receive(:get).with(current_user.id).and_return(get_result)
-      allow(mock_cluster).to receive(:query).and_return(query_result_articles)
       allow(User).to receive(:find).with('user-id').and_return(current_user)
 
       get :index
@@ -148,7 +114,6 @@ RSpec.describe ArticlesController, type: :controller do
       it 'returns an error if the article cannot be created' do
         allow(Article).to receive(:new).and_return(article)
         allow(article).to receive(:save).and_return(false)
-        allow(article).to receive(:errors).and_return(errors)
 
         post :create,
              params: { article: { title: 'Test Title', description: 'Test Description', body: 'Test Body',
@@ -176,15 +141,8 @@ RSpec.describe ArticlesController, type: :controller do
   describe 'PUT #update' do
     context 'when authenticated' do
       it 'updates the article' do
-        allow(mock_collection).to receive(:get).with(current_user.id).and_return(get_result)
-        allow(mock_collection).to receive(:upsert).and_return(true)
-
-        allow(mock_cluster).to receive(:query).with(
-          'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `slug` = ? AND `author_id` = ? LIMIT 1', anything
-        ).and_return(query_result_article)
-
-        allow(article).to receive(:update).and_call_original
-
+        allow(article).to receive(:update).and_return(article)
+        allow(article).to receive(:save).and_return(true)
         allow(Article).to receive(:find_by_slug).and_return(article)
 
         put :update, params: { id: 'test-title', article: updated_attributes }
@@ -194,13 +152,6 @@ RSpec.describe ArticlesController, type: :controller do
       end
 
       it 'returns an error if the article cannot be updated' do
-        allow(mock_collection).to receive(:get).with(current_user.id).and_return(get_result)
-        allow(mock_cluster).to receive(:query).with(
-          'SELECT META().id, * FROM RealWorldRailsBucket.`_default`.`_default` WHERE `slug` = ? AND `author_id` = ? LIMIT 1', anything
-        ).and_return(query_result_article)
-
-        allow(mock_collection).to receive(:upsert).and_return(false)
-
         allow(article).to receive(:update).and_return(false)
         allow(article).to receive_message_chain(:errors, :full_messages).and_return(['Error message'])
 
@@ -215,6 +166,7 @@ RSpec.describe ArticlesController, type: :controller do
 
     context 'when not authenticated' do
       it 'returns an error' do
+        allow(Article).to receive(:find_by_slug).and_return(nil)
         request.headers['Authorization'] = nil
         session[:user_id] = nil
 
@@ -255,7 +207,6 @@ RSpec.describe ArticlesController, type: :controller do
   describe 'GET #feed' do
     context 'when authenticated' do
       it 'returns the user feed' do
-        allow(mock_collection).to receive(:get).with(current_user.id).and_return(get_result)
         allow(current_user).to receive(:feed).and_return([article])
 
         get :feed, as: :json

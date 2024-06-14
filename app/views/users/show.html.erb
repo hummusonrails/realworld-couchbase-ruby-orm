@@ -55,11 +55,13 @@
                 <h1><%= article.title %></h1>
                 <p><%= article.description %></p>
                 <span>Read more...</span>
-                <ul class="tag-list">
-                    <% article.tags.each do |tag| %>
-                    <li class="tag-default tag-pill tag-outline"><%= tag %></li>
-                    <% end %>
-                </ul>
+                <% if article.tag_list %>
+                  <ul class="tag-list">
+                      <% article.tag_list.split(',').each do |tag| %>
+                        <li class="tag-default tag-pill tag-outline"><%= tag %></li>
+                      <% end %>
+                  </ul>
+                <% end %>
                 </a>
             </div>
             <% end %>

@@ -24,10 +24,12 @@
             <fieldset class="form-group">
               <%= f.text_field :tag_list, class: "form-control", placeholder: "Enter tags" %>
               <div class="tag-list">
-                <% @article.tags.each do |tag| %>
-                  <span class="tag-default tag-pill">
-                    <i class="ion-close-round"></i> <%= tag %>
-                  </span>
+                <% if @article.tag_list %>
+                  <% @article.tag_list.split(',').each do |tag| %>
+                    <span class="tag-default tag-pill">
+                      <i class="ion-close-round"></i> <%= tag %>
+                    </span>
+                  <% end %>
                 <% end %>
               </div>
             </fieldset>

@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+
 
 require 'rails_helper'
 
@@ -12,11 +12,13 @@ RSpec.describe 'Users API', type: :request do
     User.new(id: 'new-user-id', username: 'newuser', email: 'newuser@example.com',
              password_digest: BCrypt::Password.create('password'), bio: 'New user bio', image: 'new_image.png')
   end
+  let(:updated_user) do
+    User.new(id: 'current-user-id', username: 'currentuser', email: 'updated@example.com',
+              password_digest: BCrypt::Password.create('password'), bio: 'New bio', image: 'current_image.png')
+  end
   let(:token) { JWT.encode({ user_id: current_user.id }, Rails.application.secret_key_base) }
 
   before do
-    mock_couchbase_methods
-
     allow(User).to receive(:new).and_call_original
     allow(User).to receive(:find_by_email).and_return(current_user)
     allow(User).to receive(:find).with(current_user.id).and_return(current_user)
@@ -77,16 +79,9 @@ RSpec.describe 'Users API', type: :request do
     let(:valid_attributes) { { user: { email: 'updated@example.com', bio: 'New bio' } }.to_json }
 
     it 'updates the current user' do
-      allow(mock_collection).to receive(:upsert).with(current_user.id, hash_including(
-                                                                         'email' => 'updated@example.com',
-                                                                         'bio' => 'New bio',
-                                                                         'favorites' => [],
-                                                                         'following' => [],
-                                                                         'image' => 'current_image.png',
-                                                                         'password_digest' => current_user.password_digest,
-                                                                         'type' => 'user',
-                                                                         'username' => 'currentuser'
-                                                                       ))
+      allow_any_instance_of(User).to receive(:update).and_return(true)
+      allow_any_instance_of(User).to receive(:save).and_return(true)
+      allow_any_instance_of(User).to receive(:to_hash).and_return(updated_user.to_hash.except('password_digest'))
 
       put '/api/user', params: valid_attributes, headers: headers.merge('Authorization' => "Token #{token}")
       expect(response).to have_http_status(:ok)

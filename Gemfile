@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 source 'https://rubygems.org'
 
 ruby '3.3.1'
@@ -42,6 +40,9 @@ gem 'bootsnap', require: false
 
 # Use the official Couchbase Ruby client
 gem 'couchbase', '~> 3.5'
+
+# Use the Couchbase Ruby ORM
+gem 'couchbase-orm', git: 'https://github.com/doctolib/couchbase-orm'
 
 # Use bcrypt for password hashing
 gem 'bcrypt', '~> 3.1.13'

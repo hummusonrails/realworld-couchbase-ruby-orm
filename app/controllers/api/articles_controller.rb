@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module Api
   class ArticlesController < ApplicationController
     before_action :authenticate_user, only: %i[feed create update destroy favorite unfavorite]

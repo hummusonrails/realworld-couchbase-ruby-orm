@@ -24,9 +24,9 @@ Join us on [GitHub Discussions!](https://github.com/gothinkster/realworld/discus
 
 ### [Demo](https://demo.realworld.io/)&nbsp;&nbsp;&nbsp;&nbsp;[RealWorld](https://github.com/gothinkster/realworld)
 
-## Ruby on Rails + Couchbase RealWorld example
+## Ruby on Rails + Couchbase Ruby ORM RealWorld example
 
-This codebase was created to demonstrate a fully fledged fullstack application built with Ruby on Rails with Couchbase including CRUD operations, authentication, routing, pagination, and more.
+This codebase was created to demonstrate a fully fledged fullstack application built with Ruby on Rails with [Doctolib's](https://github.com/doctolib) [Couchbase Ruby ORM](https://couchbase-ruby-orm.com/) including CRUD operations, authentication, routing, pagination, and more.
 
 We've gone to great lengths to adhere to the Ruby on Rails community styleguides & best practices.
 
@@ -46,8 +46,8 @@ The general architecture of this RealWorld implementation is as follows:
 2. Couchbase as the Database:
 
 * The application uses Couchbase, a NoSQL database, for storing data. Couchbase is known for its flexibility, scalability, and high performance.
-* N1QL (SQL for JSON) queries are used to interact with Couchbase, making it easier to perform complex queries and operations on the data.
-* The application includes a mock for Couchbase to facilitate testing without interacting with the production database.
+* The Couchbase Ruby ORM is used to interact with the database, providing an object-oriented interface for performing CRUD operations on data.
+* The application uses Couchbase to store user profiles, articles, comments, tags, and other data.
 
 3. JWT Authentication:
 
@@ -119,15 +119,15 @@ bundle install
 Create a `.env` file in the root directory of the project and add the following environment variables:
 
 ```bash
-COUCHBASE_USERNAME=your_couchbase_username
+COUCHBASE_USER=your_COUCHBASE_USER
 COUCHBASE_PASSWORD=your_couchbase_password
-COUCHBASE_URL=your_couchbase_connection_string_url
+COUCHBASE_CONNECTION_STRING=your_couchbase_connection_string_url
 COUCHBASE_BUCKET=your_couchbase_bucket
 ```
 
 You can obtain those credentials by first creating an account on Couchbase Capella at [https://cloud.couchbase.com/](https://cloud.couchbase.com/) and then creating a database called `RealWorldRails`. Inside the database, create a bucket. The name of the bucket is what you should use for the `COUCHBASE_BUCKET` environment variable.
 
-Once you have done so, you can navigate to the `Connect` tab in the database and copy the connection string URL. This is what you should use for the `COUCHBASE_URL` environment variable. You will also need to create a user with the appropriate permissions and use the username and password for the `COUCHBASE_USERNAME` and `COUCHBASE_PASSWORD` environment variables.
+Once you have done so, you can navigate to the `Connect` tab in the database and copy the connection string URL. This is what you should use for the `COUCHBASE_CONNECTION_STRING` environment variable. You will also need to create a user with the appropriate permissions and use the username and password for the `COUCHBASE_USER` and `COUCHBASE_PASSWORD` environment variables.
 
 **Running the Test Suite**
 
